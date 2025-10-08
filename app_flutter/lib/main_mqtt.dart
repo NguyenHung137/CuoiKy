@@ -121,31 +121,42 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                         Expanded(
                           child: _StatusCard(
                             title: 'MQTT Broker',
-                            status: controller.brokerConnected ? 'Connected' : 'Disconnected',
-                            color: controller.brokerConnected ? Colors.green : Colors.red,
-                            icon: controller.brokerConnected ? Icons.wifi : Icons.wifi_off,
-                            gradient: controller.brokerConnected 
-                              ? [Colors.green.shade400, Colors.green.shade600]
-                              : [Colors.red.shade400, Colors.red.shade600],
+                            status: controller.brokerConnected
+                                ? 'Connected'
+                                : 'Disconnected',
+                            color: controller.brokerConnected
+                                ? Colors.green
+                                : Colors.red,
+                            icon: controller.brokerConnected
+                                ? Icons.wifi
+                                : Icons.wifi_off,
+                            gradient: controller.brokerConnected
+                                ? [Colors.green.shade400, Colors.green.shade600]
+                                : [Colors.red.shade400, Colors.red.shade600],
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: _StatusCard(
                             title: 'ESP32 Device',
-                            status: controller.deviceOnline ? 'Online' : 'Offline',
-                            color: controller.deviceOnline ? Colors.blue : Colors.grey,
-                            icon: controller.deviceOnline ? Icons.developer_board : Icons.developer_board_off,
-                            gradient: controller.deviceOnline 
-                              ? [Colors.blue.shade400, Colors.blue.shade600]
-                              : [Colors.grey.shade400, Colors.grey.shade600],
+                            status:
+                                controller.deviceOnline ? 'Online' : 'Offline',
+                            color: controller.deviceOnline
+                                ? Colors.blue
+                                : Colors.grey,
+                            icon: controller.deviceOnline
+                                ? Icons.developer_board
+                                : Icons.developer_board_off,
+                            gradient: controller.deviceOnline
+                                ? [Colors.blue.shade400, Colors.blue.shade600]
+                                : [Colors.grey.shade400, Colors.grey.shade600],
                           ),
                         ),
                       ],
                     ),
-                    
+
                     const SizedBox(height: 24),
-                    
+
                     // Control Cards with modern design
                     Expanded(
                       child: Column(
@@ -154,28 +165,38 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                             title: '💡 Smart Light',
                             icon: Icons.lightbulb_rounded,
                             value: controller.lightState == 'on',
-                            onChanged: controller.brokerConnected && controller.deviceOnline
+                            onChanged: controller.brokerConnected &&
+                                    controller.deviceOnline
                                 ? (value) => controller.toggleDevice('light')
                                 : null,
-                            subtitle: 'Status: ${controller.lightState.toUpperCase()}',
-                            activeGradient: [Colors.orange.shade400, Colors.orange.shade600],
+                            subtitle:
+                                'Status: ${controller.lightState.toUpperCase()}',
+                            activeGradient: [
+                              Colors.orange.shade400,
+                              Colors.orange.shade600
+                            ],
                           ),
-                          
+
                           const SizedBox(height: 16),
-                          
+
                           _ControlCard(
                             title: '🌀 Smart Fan',
                             icon: Icons.air_rounded,
                             value: controller.fanState == 'on',
-                            onChanged: controller.brokerConnected && controller.deviceOnline
+                            onChanged: controller.brokerConnected &&
+                                    controller.deviceOnline
                                 ? (value) => controller.toggleDevice('fan')
                                 : null,
-                            subtitle: 'Status: ${controller.fanState.toUpperCase()}',
-                            activeGradient: [Colors.cyan.shade400, Colors.cyan.shade600],
+                            subtitle:
+                                'Status: ${controller.fanState.toUpperCase()}',
+                            activeGradient: [
+                              Colors.cyan.shade400,
+                              Colors.cyan.shade600
+                            ],
                           ),
-                          
+
                           const SizedBox(height: 24),
-                          
+
                           // Enhanced Device Info Card
                           Card(
                             elevation: 8,
@@ -204,24 +225,33 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                                           padding: const EdgeInsets.all(8),
                                           decoration: BoxDecoration(
                                             color: Colors.purple.shade100,
-                                            borderRadius: BorderRadius.circular(8),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
                                           ),
-                                          child: Icon(Icons.info_rounded, color: Colors.purple.shade700, size: 20),
+                                          child: Icon(Icons.info_rounded,
+                                              color: Colors.purple.shade700,
+                                              size: 20),
                                         ),
                                         const SizedBox(width: 12),
                                         Text(
                                           'Device Information',
-                                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.purple.shade800,
-                                          ),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.purple.shade800,
+                                              ),
                                         ),
                                       ],
                                     ),
                                     const SizedBox(height: 16),
-                                    _InfoRow('📡 WiFi Signal', '${controller.rssi} dBm'),
-                                    _InfoRow('💿 Firmware', controller.firmware),
-                                    _InfoRow('⏰ Last Update', controller.lastUpdate),
+                                    _InfoRow('📡 WiFi Signal',
+                                        '${controller.rssi} dBm'),
+                                    _InfoRow(
+                                        '💿 Firmware', controller.firmware),
+                                    _InfoRow(
+                                        '⏰ Last Update', controller.lastUpdate),
                                   ],
                                 ),
                               ),
@@ -230,7 +260,7 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                         ],
                       ),
                     ),
-                    
+
                     // Enhanced Reconnect Button
                     if (!controller.brokerConnected)
                       Padding(
@@ -240,11 +270,16 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
                             gradient: LinearGradient(
-                              colors: [Colors.blue.shade600, Colors.purple.shade600],
+                              colors: [
+                                Colors.blue.shade600,
+                                Colors.purple.shade600
+                              ],
                             ),
                           ),
                           child: ElevatedButton.icon(
-                            onPressed: controller.isConnecting ? null : controller.connect,
+                            onPressed: controller.isConnecting
+                                ? null
+                                : controller.connect,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.transparent,
                               shadowColor: Colors.transparent,
@@ -258,10 +293,15 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : const Icon(Icons.refresh_rounded, color: Colors.white),
+                                : const Icon(Icons.refresh_rounded,
+                                    color: Colors.white),
                             label: Text(
-                              controller.isConnecting ? 'Connecting...' : 'Reconnect to Broker',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              controller.isConnecting
+                                  ? 'Connecting...'
+                                  : 'Reconnect to Broker',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold),
                             ),
                           ),
                         ),
@@ -283,7 +323,7 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            label, 
+            label,
             style: TextStyle(
               fontWeight: FontWeight.w600,
               color: Colors.purple.shade700,
@@ -297,7 +337,7 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              value, 
+              value,
               style: TextStyle(
                 color: Colors.purple.shade800,
                 fontWeight: FontWeight.w500,
@@ -332,7 +372,7 @@ class _StatusCard extends StatelessWidget {
       elevation: 6,
       shadowColor: color.withOpacity(0.3),
       child: Container(
-        height: 100,
+        height: 100, // Giữ nguyên chiều cao
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
@@ -342,31 +382,35 @@ class _StatusCard extends StatelessWidget {
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: Colors.white, size: 28),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
+          // SỬA LỖI: Dùng FittedBox để nội dung tự co giãn
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: Colors.white, size: 28),
+                const SizedBox(height: 4), // Giảm khoảng cách một chút
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              Text(
-                status,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11,
+                Text(
+                  status,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -395,22 +439,24 @@ class _ControlCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: value ? 8 : 4,
-      shadowColor: value ? activeGradient.first.withOpacity(0.3) : Colors.black.withOpacity(0.1),
+      shadowColor: value
+          ? activeGradient.first.withOpacity(0.3)
+          : Colors.black.withOpacity(0.1),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          gradient: value 
-            ? LinearGradient(
-                colors: activeGradient,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : LinearGradient(
-                colors: [Colors.grey.shade100, Colors.grey.shade200],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+          gradient: value
+              ? LinearGradient(
+                  colors: activeGradient,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : LinearGradient(
+                  colors: [Colors.grey.shade100, Colors.grey.shade200],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
         ),
         child: Padding(
           padding: const EdgeInsets.all(20.0),
@@ -419,7 +465,9 @@ class _ControlCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: value ? Colors.white.withOpacity(0.2) : Colors.grey.shade300,
+                  color: value
+                      ? Colors.white.withOpacity(0.2)
+                      : Colors.grey.shade300,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -472,21 +520,22 @@ class _ControlCard extends StatelessWidget {
 }
 
 class MqttController extends ChangeNotifier {
-  // Configuration - Updated for HiveMQ public broker like other components
-  static const String mqttHost = 'broker.hivemq.com';
+  // Configuration - SỬA LẠI ĐỂ KẾT NỐI VÀO BROKER NỘI BỘ
+  static const String mqttHost = '10.0.2.2'; // <--- SỬA 1: Dùng IP của bạn
   static const int mqttPort = 1883;
-  static const String mqttUsername = ''; // No auth needed for public broker
-  static const String mqttPassword = '';
-  static const String topicNamespace = 'demo/room1'; // Match other components
+  static const String mqttUsername = 'user1'; // <--- SỬA 2: Thêm username
+  static const String mqttPassword = 'pass1'; // <--- SỬA 3: Thêm password
+  static const String topicNamespace =
+      'lab/room1'; // <--- SỬA 4: Dùng đúng topic
 
   // MQTT Client
   late MqttServerClient _client;
-  
+
   // Connection states
   bool _brokerConnected = false;
   bool _deviceOnline = false;
   bool _isConnecting = false;
-  
+
   // Device states
   String _lightState = 'off';
   String _fanState = 'off';
@@ -523,7 +572,7 @@ class MqttController extends ChangeNotifier {
   void _initializeClient() {
     final clientId = 'flutter_client_${DateTime.now().millisecondsSinceEpoch}';
     _client = MqttServerClient.withPort(mqttHost, clientId, mqttPort);
-    
+
     _client.logging(on: true);
     _client.onConnected = _onConnected;
     _client.onDisconnected = _onDisconnected;
@@ -538,13 +587,13 @@ class MqttController extends ChangeNotifier {
 
   Future<void> connect() async {
     if (_isConnecting) return;
-    
+
     _isConnecting = true;
     notifyListeners();
 
     try {
       print('Connecting to MQTT broker at $mqttHost:$mqttPort');
-      
+
       final connMessage = MqttConnectMessage()
           .withClientIdentifier(_client.clientIdentifier)
           .withWillTopic('$topicNamespace/app/online')
@@ -552,12 +601,12 @@ class MqttController extends ChangeNotifier {
           .withWillRetain()
           .startClean()
           .withWillQos(MqttQos.atLeastOnce);
-      
+
       // Set credentials if provided
       if (mqttUsername.isNotEmpty && mqttPassword.isNotEmpty) {
         connMessage.authenticateAs(mqttUsername, mqttPassword);
       }
-          
+
       _client.connectionMessage = connMessage;
 
       await _client.connect();
@@ -571,14 +620,14 @@ class MqttController extends ChangeNotifier {
     print('Connected to MQTT broker');
     _brokerConnected = true;
     _isConnecting = false;
-    
+
     // Subscribe to topics
     _client.subscribe(_deviceStateTopic, MqttQos.atLeastOnce);
     _client.subscribe(_sysOnlineTopic, MqttQos.atLeastOnce);
-    
+
     // Listen for messages
     _client.updates!.listen(_onMessage);
-    
+
     notifyListeners();
   }
 
@@ -619,7 +668,7 @@ class MqttController extends ChangeNotifier {
       final payload = MqttPublishPayload.bytesToStringAsString(
         (message.payload as MqttPublishMessage).payload.message,
       );
-      
+
       print('Received message on $topic: $payload');
       _handleMessage(topic, payload);
     }
@@ -628,13 +677,13 @@ class MqttController extends ChangeNotifier {
   void _handleMessage(String topic, String payload) {
     try {
       final data = jsonDecode(payload) as Map<String, dynamic>;
-      
+
       if (topic == _deviceStateTopic) {
         _handleDeviceState(data);
       } else if (topic == _sysOnlineTopic) {
         _handleOnlineStatus(data);
       }
-      
+
       _updateLastUpdate();
       notifyListeners();
     } catch (e) {
@@ -666,8 +715,8 @@ class MqttController extends ChangeNotifier {
   void _updateLastUpdate() {
     final now = DateTime.now();
     _lastUpdate = '${now.hour.toString().padLeft(2, '0')}:'
-                 '${now.minute.toString().padLeft(2, '0')}:'
-                 '${now.second.toString().padLeft(2, '0')}';
+        '${now.minute.toString().padLeft(2, '0')}:'
+        '${now.second.toString().padLeft(2, '0')}';
   }
 
   void toggleDevice(String device) {
@@ -678,10 +727,10 @@ class MqttController extends ChangeNotifier {
 
     final command = jsonEncode({device: 'toggle'});
     print('Sending command: $command to $_deviceCmdTopic');
-    
+
     final builder = MqttClientPayloadBuilder();
     builder.addString(command);
-    
+
     _client.publishMessage(
       _deviceCmdTopic,
       MqttQos.atLeastOnce,

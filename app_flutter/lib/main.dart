@@ -69,9 +69,10 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
     // MQTT configuration matching ESP32 simulator
     const broker = 'wss://broker.hivemq.com:8884/mqtt';
     const topicNamespace = 'demo/room1';
-    
+
     // Create MQTT client using JavaScript
-    js.context.callMethod('eval', ['''
+    js.context.callMethod('eval', [
+      '''
       window.flutterMqttClient = mqtt.connect('$broker', {
         clientId: 'flutter_web_' + Math.random().toString(16).substr(2, 8)
       });
@@ -106,7 +107,8 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
         window.flutterMqttClient.publish(topic, payload);
         console.log('Sent command:', device, action);
       };
-    ''']);
+    '''
+    ]);
 
     // Listen for MQTT events
     html.window.addEventListener('mqtt_connected', (event) {
@@ -139,7 +141,7 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
 
     try {
       final data = jsonDecode(payload);
-      
+
       if (topic.endsWith('/device/state')) {
         setState(() {
           _lightState = data['light'] ?? 'unknown';
@@ -171,7 +173,7 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
 
     // Send MQTT command
     js.context.callMethod('sendMqttCommand', [device, 'toggle']);
-    
+
     // Show feedback
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -224,12 +226,13 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                     Expanded(
                       child: _StatusCard(
                         title: 'MQTT Broker',
-                        status: _brokerConnected ? 'Connected' : 'Connecting...',
+                        status:
+                            _brokerConnected ? 'Connected' : 'Connecting...',
                         color: _brokerConnected ? Colors.green : Colors.orange,
                         icon: _brokerConnected ? Icons.wifi : Icons.wifi_off,
-                        gradient: _brokerConnected 
-                          ? [Colors.green.shade400, Colors.green.shade600]
-                          : [Colors.orange.shade400, Colors.orange.shade600],
+                        gradient: _brokerConnected
+                            ? [Colors.green.shade400, Colors.green.shade600]
+                            : [Colors.orange.shade400, Colors.orange.shade600],
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -238,17 +241,19 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                         title: 'ESP32 Device',
                         status: _deviceOnline ? 'Online' : 'Offline',
                         color: _deviceOnline ? Colors.blue : Colors.grey,
-                        icon: _deviceOnline ? Icons.developer_board : Icons.developer_board_off,
-                        gradient: _deviceOnline 
-                          ? [Colors.blue.shade400, Colors.blue.shade600]
-                          : [Colors.grey.shade400, Colors.grey.shade600],
+                        icon: _deviceOnline
+                            ? Icons.developer_board
+                            : Icons.developer_board_off,
+                        gradient: _deviceOnline
+                            ? [Colors.blue.shade400, Colors.blue.shade600]
+                            : [Colors.grey.shade400, Colors.grey.shade600],
                       ),
                     ),
                   ],
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Control Cards with modern design
                 Expanded(
                   child: Column(
@@ -261,11 +266,14 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                             ? (value) => _toggleDevice('light')
                             : null,
                         subtitle: 'Status: ${_lightState.toUpperCase()}',
-                        activeGradient: [Colors.orange.shade400, Colors.orange.shade600],
+                        activeGradient: [
+                          Colors.orange.shade400,
+                          Colors.orange.shade600
+                        ],
                       ),
-                      
+
                       const SizedBox(height: 16),
-                      
+
                       _ControlCard(
                         title: '🌀 Smart Fan',
                         icon: Icons.air_rounded,
@@ -274,11 +282,14 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                             ? (value) => _toggleDevice('fan')
                             : null,
                         subtitle: 'Status: ${_fanState.toUpperCase()}',
-                        activeGradient: [Colors.cyan.shade400, Colors.cyan.shade600],
+                        activeGradient: [
+                          Colors.cyan.shade400,
+                          Colors.cyan.shade600
+                        ],
                       ),
-                      
+
                       const SizedBox(height: 24),
-                      
+
                       // Enhanced Device Info Card
                       Card(
                         elevation: 8,
@@ -309,15 +320,20 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                                         color: Colors.purple.shade100,
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: Icon(Icons.info_rounded, color: Colors.purple.shade700, size: 20),
+                                      child: Icon(Icons.info_rounded,
+                                          color: Colors.purple.shade700,
+                                          size: 20),
                                     ),
                                     const SizedBox(width: 12),
                                     Text(
                                       'Device Information',
-                                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.purple.shade800,
-                                      ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.purple.shade800,
+                                          ),
                                     ),
                                   ],
                                 ),
@@ -333,7 +349,7 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                     ],
                   ),
                 ),
-                
+
                 // Connection status info
                 if (!_brokerConnected)
                   Container(
@@ -359,7 +375,7 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                       ],
                     ),
                   ),
-                  
+
                 // Sync status indicator
                 if (_brokerConnected && _deviceOnline)
                   Container(
@@ -372,11 +388,14 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.sync, color: Colors.green.shade700, size: 16),
+                        Icon(Icons.sync,
+                            color: Colors.green.shade700, size: 16),
                         const SizedBox(width: 8),
                         Text(
                           'Synced with Web Dashboard',
-                          style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w500),
+                          style: TextStyle(
+                              color: Colors.green.shade700,
+                              fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
@@ -396,7 +415,7 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            label, 
+            label,
             style: TextStyle(
               fontWeight: FontWeight.w600,
               color: Colors.purple.shade700,
@@ -410,7 +429,7 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              value, 
+              value,
               style: TextStyle(
                 color: Colors.purple.shade800,
                 fontWeight: FontWeight.w500,
@@ -456,30 +475,32 @@ class _StatusCard extends StatelessWidget {
         ),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: Colors.white, size: 28),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Icon(icon, color: Colors.white, size: 28),
+                const SizedBox(height: 8),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
-              ),
-              Text(
-                status,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11,
+                Text(
+                  status,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -508,22 +529,24 @@ class _ControlCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: value ? 8 : 4,
-      shadowColor: value ? activeGradient.first.withOpacity(0.3) : Colors.black.withOpacity(0.1),
+      shadowColor: value
+          ? activeGradient.first.withOpacity(0.3)
+          : Colors.black.withOpacity(0.1),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          gradient: value 
-            ? LinearGradient(
-                colors: activeGradient,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : LinearGradient(
-                colors: [Colors.grey.shade100, Colors.grey.shade200],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+          gradient: value
+              ? LinearGradient(
+                  colors: activeGradient,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : LinearGradient(
+                  colors: [Colors.grey.shade100, Colors.grey.shade200],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
         ),
         child: Padding(
           padding: const EdgeInsets.all(20.0),
@@ -532,7 +555,9 @@ class _ControlCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: value ? Colors.white.withOpacity(0.2) : Colors.grey.shade300,
+                  color: value
+                      ? Colors.white.withOpacity(0.2)
+                      : Colors.grey.shade300,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
