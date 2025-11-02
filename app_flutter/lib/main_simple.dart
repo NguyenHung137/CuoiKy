@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 
 void main() {
@@ -46,7 +48,7 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
   String _lightState = 'off';
   String _fanState = 'off';
   String _rssi = '--';
-  final String _firmware = 'v1.0.0';
+  String _firmware = 'v1.0.0';
   String _lastUpdate = '--';
 
   @override
@@ -228,9 +230,9 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
                                   ],
                                 ),
                                 const SizedBox(height: 16),
-                                _infoRow('📡 WiFi Signal', _rssi),
-                                _infoRow('💿 Firmware', _firmware),
-                                _infoRow('⏰ Last Update', _lastUpdate),
+                                _InfoRow('📡 WiFi Signal', _rssi),
+                                _InfoRow('💿 Firmware', _firmware),
+                                _InfoRow('⏰ Last Update', _lastUpdate),
                               ],
                             ),
                           ),
@@ -273,7 +275,7 @@ class _IoTControllerPageState extends State<IoTControllerPage> {
     );
   }
 
-  Widget _infoRow(String label, String value) {
+  Widget _InfoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -454,7 +456,7 @@ class _ControlCard extends StatelessWidget {
                 child: Switch(
                   value: value,
                   onChanged: onChanged,
-                  activeThumbColor: Colors.white,
+                  activeColor: Colors.white,
                   activeTrackColor: Colors.white.withOpacity(0.3),
                   inactiveThumbColor: Colors.grey.shade400,
                   inactiveTrackColor: Colors.grey.shade300,

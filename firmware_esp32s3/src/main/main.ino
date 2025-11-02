@@ -1,6 +1,6 @@
 /*
- * ESP32-S3 IoT Demo Firmware
- * Nâng cấp để điều khiển Motor DC qua L298N
+ * ESP32 IoT Demo Firmware
+ * Nâng cấp với tính năng Tự động hóa và Hẹn giờ
  */
 
 #include <Arduino.h>
@@ -9,17 +9,18 @@
 #include <ArduinoJson.h>
 #include <time.h>
 #include <DHT.h>
+#include <Preferences.h> // <-- THƯ VIỆN MỚI để lưu trữ
 
 // =============================================================================
 // CONFIGURATION
 // =============================================================================
 
 // WiFi Configuration
-const char* WIFI_SSID = "TDMU";
-const char* WIFI_PASSWORD = "";
+const char* WIFI_SSID = "Hoi Coffee 1";
+const char* WIFI_PASSWORD = "12356789";
 
 // MQTT Broker Configuration
-const char* MQTT_HOST = "10.15.175.192";
+const char* MQTT_HOST = "192.168.1.216";
 const int MQTT_PORT = 1883;
 const char* MQTT_USERNAME = "user1";
 const char* MQTT_PASSWORD = "pass1";
@@ -31,69 +32,96 @@ const int DAYLIGHT_OFFSET_SEC = 0;
 
 // Device Configuration
 const char* DEVICE_ID = "esp32_demo_001";
-const char* FIRMWARE_VERSION = "demo1-1.0.4-L298N-analogWrite"; // Firmware version (updated for L298N)
+const char* FIRMWARE_VERSION = "demo1-1.0.6-Scheduling"; // Cập nhật phiên bản
 const char* TOPIC_NS = "lab/room1";
 
 // =============================================================================
-// GPIO PIN CONFIGURATION (SỬA ĐỔI CHO L298N)
+// GPIO PIN CONFIGURATION
 // =============================================================================
-const int LIGHT_RELAY_PIN = 10;   // GPIO cho đèn (chọn chân khác nếu cần)
+const int LIGHT_PIN       = 10;
 const int STATUS_LED_PIN  = 2;
 const int DHT_PIN         = 4;
+const int MOTOR_ENA_PIN   = 5;
+const int MOTOR_IN1_PIN   = 6;
+const int MOTOR_IN2_PIN   = 7;
 
-// --- Chân điều khiển Motor ---
-const int MOTOR_ENA_PIN   = 5;    // Chân tốc độ (phải hỗ trợ PWM)
-const int MOTOR_IN1_PIN   = 6;    // Chân chiều quay 1
-const int MOTOR_IN2_PIN   = 7;    // Chân chiều quay 2
 // =============================================================================
-
-// Timing Configuration
+// TIMING & OTHER CONSTANTS
+// =============================================================================
 const unsigned long SENSOR_PUBLISH_INTERVAL = 3000;
 const unsigned long HEARTBEAT_INTERVAL = 15000;
 const unsigned long WIFI_RECONNECT_INTERVAL = 5000;
 const unsigned long MQTT_RECONNECT_INTERVAL = 5000;
 const unsigned long COMMAND_DEBOUNCE_DELAY = 500;
 
-// Global variables...
+// =============================================================================
+// GLOBAL VARIABLES & STRUCTURES
+// =============================================================================
+
+// Thư viện & Client
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 DHT dht(DHT_PIN, DHT22);
+Preferences preferences; // Đối tượng để truy cập bộ nhớ lưu trữ
 
+// Biến trạng thái
 bool lightState = false;
-bool fanState = false; // Vẫn dùng biến này để biết motor đang BẬT hay TẮT
+bool fanState = false;
 bool deviceOnline = false;
+bool autoModeEnabled = true;
 
-// ... (Các biến timing và topic giữ nguyên)
+// Cấu trúc để lưu trữ lịch trình cho một thiết bị
+struct DeviceSchedule {
+    int on_hour = -1; // -1 nghĩa là chưa được đặt
+    int on_minute = -1;
+    int off_hour = -1;
+    int off_minute = -1;
+};
+DeviceSchedule lightSchedule;
+DeviceSchedule fanSchedule;
+
+// Biến thời gian
 unsigned long lastSensorPublish = 0;
 unsigned long lastHeartbeat = 0;
 unsigned long lastWifiCheck = 0;
 unsigned long lastMqttCheck = 0;
 unsigned long lastCommandTime = 0;
-String topicSensorState;
-String topicDeviceState;
-String topicDeviceCmd;
-String topicSysOnline;
+unsigned long lastScheduleCheck = 0;
 
-// Forward declarations
+// Biến Topic
+String topicSensorState, topicDeviceState, topicDeviceCmd, topicSysOnline, topicScheduleSet;
+
+// Khai báo trước các hàm (Forward Declarations)
 void initNTP();
 void onMqttMessage(char* topic, byte* payload, unsigned int length);
 void connectMQTT();
 void publishDeviceState();
-void publishOnlineStatus(bool online);
-void publishSensorData();
 void controlMotor(bool turnOn);
+void checkAutomation(float temperature);
+void loadSchedules();
+void checkSchedules();
+void initGPIO();
+void initTopics();
+void initWiFi();
+void initMQTT();
+void checkWiFi(unsigned long currentTime);
+void checkMQTT(unsigned long currentTime);
+void publishOnlineStatus(bool online);
+void updateStatusLED();
+void handleDeviceCommand(String message);
+void saveSchedule(const char* device, JsonObject scheduleData);
+
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(115220);
   delay(1000);
   
-  Serial.println("\n=== ESP32 IoT Demo (L298N Motor Control) ===");
+  Serial.println("\n=== ESP32 IoT Demo (Automation + Scheduling) ===");
   initGPIO();
   dht.begin();
-  Serial.println("DHT22 sensor initialized.");
   
-  // Không cần cấu hình PWM phức tạp khi dùng analogWrite
-  Serial.println("Using analogWrite for motor speed control.");
+  // TÍNH NĂNG MỚI: Đọc lịch trình đã lưu khi khởi động
+  loadSchedules();
 
   initTopics();
   initWiFi();
@@ -103,16 +131,26 @@ void setup() {
 }
 
 void loop() {
-  // ... (Hàm loop giữ nguyên, không cần sửa)
   unsigned long currentTime = millis();
   checkWiFi(currentTime);
   checkMQTT(currentTime);
+
   if (mqttClient.connected()) {
     mqttClient.loop();
+    
+    // Kiểm tra lịch trình sau mỗi giây
+    if (currentTime - lastScheduleCheck >= 1000) {
+        checkSchedules();
+        lastScheduleCheck = currentTime;
+    }
+
+    // Gửi dữ liệu cảm biến định kỳ
     if (currentTime - lastSensorPublish >= SENSOR_PUBLISH_INTERVAL) {
       publishSensorData();
       lastSensorPublish = currentTime;
     }
+    
+    // Gửi heartbeat định kỳ
     if (currentTime - lastHeartbeat >= HEARTBEAT_INTERVAL) {
       publishDeviceState();
       lastHeartbeat = currentTime;
@@ -123,202 +161,152 @@ void loop() {
 }
 
 // =============================================================================
-// SỬA ĐỔI: HÀM ĐIỀU KHIỂN MOTOR
+// CÁC HÀM MỚI CHO TÍNH NĂNG HẸN GIỜ
 // =============================================================================
+
+void loadSchedules() {
+    preferences.begin("schedules", true); // Mở namespace 'schedules' ở chế độ chỉ đọc
+    
+    lightSchedule.on_hour = preferences.getInt("l_on_h", -1);
+    lightSchedule.on_minute = preferences.getInt("l_on_m", -1);
+    lightSchedule.off_hour = preferences.getInt("l_off_h", -1);
+    lightSchedule.off_minute = preferences.getInt("l_off_m", -1);
+
+    fanSchedule.on_hour = preferences.getInt("f_on_h", -1);
+    fanSchedule.on_minute = preferences.getInt("f_on_m", -1);
+    fanSchedule.off_hour = preferences.getInt("f_off_h", -1);
+    fanSchedule.off_minute = preferences.getInt("f_off_m", -1);
+
+    Serial.println("Loaded schedules from memory.");
+    preferences.end();
+}
+
+void saveSchedule(const char* device, JsonObject scheduleData) {
+    preferences.begin("schedules", false); // Mở namespace ở chế độ ghi
+
+    String prefix = (strcmp(device, "light") == 0) ? "l_" : "f_";
+
+    preferences.putInt((prefix + "on_h").c_str(), scheduleData["on_hour"]);
+    preferences.putInt((prefix + "on_m").c_str(), scheduleData["on_minute"]);
+    preferences.putInt((prefix + "off_h").c_str(), scheduleData["off_hour"]);
+    preferences.putInt((prefix + "off_m").c_str(), scheduleData["off_minute"]);
+
+    Serial.printf("Saved new schedule for %s\n", device);
+    preferences.end();
+    
+    // Tải lại lịch trình vào bộ nhớ RAM để áp dụng ngay
+    loadSchedules();
+}
+
+void checkSchedules() {
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+        return; // Không có thời gian thực, không thể kiểm tra lịch
+    }
+
+    int currentHour = timeinfo.tm_hour;
+    int currentMinute = timeinfo.tm_min;
+
+    // --- Kiểm tra lịch của đèn ---
+    if (lightSchedule.on_hour != -1 && currentHour == lightSchedule.on_hour && currentMinute == lightSchedule.on_minute) {
+        if (!lightState) {
+            Serial.println("SCHEDULE: Turning light ON");
+            lightState = true;
+            digitalWrite(LIGHT_PIN, HIGH);
+            publishDeviceState();
+        }
+    }
+    if (lightSchedule.off_hour != -1 && currentHour == lightSchedule.off_hour && currentMinute == lightSchedule.off_minute) {
+        if (lightState) {
+            Serial.println("SCHEDULE: Turning light OFF");
+            lightState = false;
+            digitalWrite(LIGHT_PIN, LOW);
+            publishDeviceState();
+        }
+    }
+
+    // --- Kiểm tra lịch của quạt ---
+    if (fanSchedule.on_hour != -1 && currentHour == fanSchedule.on_hour && currentMinute == fanSchedule.on_minute) {
+        if (!fanState) {
+            Serial.println("SCHEDULE: Turning fan ON");
+            autoModeEnabled = false; // Hẹn giờ ưu tiên hơn tự động
+            fanState = true;
+            controlMotor(true);
+            publishDeviceState();
+        }
+    }
+    if (fanSchedule.off_hour != -1 && currentHour == fanSchedule.off_hour && currentMinute == fanSchedule.off_minute) {
+        if (fanState) {
+            Serial.println("SCHEDULE: Turning fan OFF");
+            fanState = false;
+            controlMotor(false);
+            publishDeviceState();
+        }
+    }
+}
+
+
+// =============================================================================
+// CÁC HÀM ĐÃ CÓ (GIỮ NGUYÊN HOẶC CẬP NHẬT)
+// =============================================================================
+
+void checkAutomation(float temperature) {
+    if (!autoModeEnabled) return;
+    if (temperature > 30.0 && !fanState) {
+        Serial.println("AUTOMATION: Temperature high, turning fan ON.");
+        fanState = true; controlMotor(true); publishDeviceState();
+    } else if (temperature < 28.0 && fanState) {
+        Serial.println("AUTOMATION: Temperature normal, turning fan OFF.");
+        fanState = false; controlMotor(false); publishDeviceState();
+    }
+}
+
 void controlMotor(bool turnOn) {
     if (turnOn) {
         Serial.println("Turning motor ON (Forward, Full Speed)");
-        // Quay thuận: IN1=HIGH, IN2=LOW
         digitalWrite(MOTOR_IN1_PIN, HIGH);
         digitalWrite(MOTOR_IN2_PIN, LOW);
-        // Chạy tốc độ tối đa (0-255)
         analogWrite(MOTOR_ENA_PIN, 255); 
     } else {
         Serial.println("Turning motor OFF");
-        // Dừng motor: IN1=LOW, IN2=LOW
         digitalWrite(MOTOR_IN1_PIN, LOW);
         digitalWrite(MOTOR_IN2_PIN, LOW);
-        // Tốc độ bằng 0
         analogWrite(MOTOR_ENA_PIN, 0);
     }
 }
 
-
-// =============================================================================
-// SỬA ĐỔI: XỬ LÝ LỆNH MQTT
-// =============================================================================
-void handleDeviceCommand(String message) {
-  // ... (Phần debounce và parse JSON giữ nguyên)
-  unsigned long currentTime = millis();
-  if (currentTime - lastCommandTime < COMMAND_DEBOUNCE_DELAY) {
-    Serial.println("Command ignored due to debounce");
-    return;
-  }
-  lastCommandTime = currentTime;
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, message);
-  if (error) {
-    Serial.printf("JSON parse error: %s\n", error.c_str());
-    return;
-  }
+void onMqttMessage(char* topic, byte* payload, unsigned int length) {
+  String topicStr = String(topic);
+  String message;
+  for (int i = 0; i < length; i++) { message += (char)payload[i]; }
   
-  bool stateChanged = false;
+  Serial.printf("Received [%s]: %s\n", topic, message.c_str());
 
-  // Xử lý lệnh đèn (giữ nguyên)
-  if (doc.containsKey("light")) {
-    String lightCmd = doc["light"].as<String>();
-    if (lightCmd.equalsIgnoreCase("on")) {
-        lightState = true;
-        stateChanged = true;
-    } else if (lightCmd.equalsIgnoreCase("off")) {
-        lightState = false;
-        stateChanged = true;
-    } else if (lightCmd.equalsIgnoreCase("toggle")) {
-      lightState = !lightState;
-      stateChanged = true;
+  if (topicStr == topicDeviceCmd) {
+    handleDeviceCommand(message);
+  } 
+  else if (topicStr == topicScheduleSet) {
+    JsonDocument doc;
+    if (deserializeJson(doc, message) == DeserializationError::Ok) {
+        const char* device = doc["device"];
+        if (device) {
+             saveSchedule(device, doc.as<JsonObject>());
+        }
     }
-    digitalWrite(LIGHT_RELAY_PIN, lightState ? HIGH : LOW);
-    Serial.printf("Light turned %s\n", lightState ? "ON" : "OFF");
-  }
-  
-  // SỬA ĐỔI: Xử lý lệnh "fan" (nay là motor)
-  if (doc.containsKey("fan")) {
-    String fanCmd = doc["fan"].as<String>();
-    Serial.printf("Motor command: %s\n", fanCmd.c_str());
-    
-    if (fanCmd.equalsIgnoreCase("on")) {
-        fanState = true;
-        stateChanged = true;
-    } else if (fanCmd.equalsIgnoreCase("off")) {
-        fanState = false;
-        stateChanged = true;
-    } else if (fanCmd.equalsIgnoreCase("toggle")) {
-        fanState = !fanState;
-        stateChanged = true;
-    }
-    
-    // Gọi hàm điều khiển motor
-    controlMotor(fanState);
-  }
-  
-  if (stateChanged) {
-    publishDeviceState();
   }
 }
 
-// ... (Các hàm còn lại như initGPIO, initWiFi, publishSensorData... giữ nguyên hoặc đã được tích hợp ở trên)
-void initGPIO() {
-  Serial.println("Initializing GPIO pins...");
-  pinMode(LIGHT_RELAY_PIN, OUTPUT);
-  pinMode(STATUS_LED_PIN, OUTPUT);
-  
-  // SỬA ĐỔI: Cấu hình chân motor
-  pinMode(MOTOR_IN1_PIN, OUTPUT);
-  pinMode(MOTOR_IN2_PIN, OUTPUT);
-  // analogWrite tự xử lý pinMode cho chân ENA
-  
-  digitalWrite(LIGHT_RELAY_PIN, LOW);
-  digitalWrite(STATUS_LED_PIN, LOW);
-  
-  // SỬA ĐỔI: Đảm bảo motor dừng khi khởi động
-  digitalWrite(MOTOR_IN1_PIN, LOW);
-  digitalWrite(MOTOR_IN2_PIN, LOW);
-
-  Serial.printf("Light relay pin: %d\n", LIGHT_RELAY_PIN);
-  Serial.printf("Status LED pin: %d\n", STATUS_LED_PIN);
-  Serial.printf("Motor pins: ENA=%d, IN1=%d, IN2=%d\n", MOTOR_ENA_PIN, MOTOR_IN1_PIN, MOTOR_IN2_PIN);
-}
-
-// ... (Sao chép toàn bộ các hàm còn lại không thay đổi từ code cũ của bạn vào đây)
-// Các hàm cần sao chép:
-// initTopics(), initWiFi(), initNTP(), initMQTT(), checkWiFi(), checkMQTT(), 
-// connectMQTT(), onMqttMessage(), publishSensorData(), publishDeviceState(),
-// publishOnlineStatus(), updateStatusLED()
-void initTopics() {
-  Serial.println("Initializing MQTT topics...");
-  topicSensorState = String(TOPIC_NS) + "/sensor/state";
-  topicDeviceState = String(TOPIC_NS) + "/device/state";
-  topicDeviceCmd = String(TOPIC_NS) + "/device/cmd";
-  topicSysOnline = String(TOPIC_NS) + "/sys/online";
-  Serial.printf("Sensor topic: %s\n", topicSensorState.c_str());
-  Serial.printf("Device state topic: %s\n", topicDeviceState.c_str());
-  Serial.printf("Command topic: %s\n", topicDeviceCmd.c_str());
-  Serial.printf("Online topic: %s\n", topicSysOnline.c_str());
-}
-void initWiFi() {
-  Serial.printf("Connecting to WiFi: %s\n", WIFI_SSID);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-    delay(500);
-    Serial.print(".");
-    attempts++;
-  }
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\nWiFi connected! IP: %s\n", WiFi.localIP().toString().c_str());
-    Serial.printf("RSSI: %d dBm\n", WiFi.RSSI());
-  } else {
-    Serial.println("\nWiFi connection failed!");
-  }
-}
-void initNTP() {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Cannot initialize NTP, WiFi not connected.");
-    return;
-  }
-  Serial.println("Initializing NTP client...");
-  configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) {
-    Serial.println("Failed to obtain time");
-    return;
-  }
-  Serial.println("NTP time synchronized successfully.");
-  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
-}
-void initMQTT() {
-  Serial.printf("Setting up MQTT client for %s:%d\n", MQTT_HOST, MQTT_PORT);
-  mqttClient.setServer(MQTT_HOST, MQTT_PORT);
-  mqttClient.setCallback(onMqttMessage);
-  mqttClient.setKeepAlive(30);
-  mqttClient.setSocketTimeout(5);
-  connectMQTT();
-}
-// THAY THẾ HÀM checkWiFi CŨ BẰNG HÀM NÀY
-void checkWiFi(unsigned long currentTime) {
-  if (currentTime - lastWifiCheck < WIFI_RECONNECT_INTERVAL) return;
-  lastWifiCheck = currentTime;
-
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi disconnected. Attempting to reconnect...");
-    // Dùng WiFi.reconnect() thay vì WiFi.begin() để tránh xung đột
-    WiFi.reconnect(); 
-  }
-}
-void checkMQTT(unsigned long currentTime) {
-  if (currentTime - lastMqttCheck < MQTT_RECONNECT_INTERVAL) return;
-  lastMqttCheck = currentTime;
-  if (WiFi.status() == WL_CONNECTED && !mqttClient.connected()) {
-    Serial.println("MQTT disconnected. Reconnecting...");
-    connectMQTT();
-  }
-}
 void connectMQTT() {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi not connected, skipping MQTT connection");
-    return;
-  }
+  if (WiFi.status() != WL_CONNECTED) return;
   Serial.printf("Connecting to MQTT broker: %s:%d\n", MQTT_HOST, MQTT_PORT);
   String lwt = "{\"online\":false}";
-  bool connected = mqttClient.connect(DEVICE_ID, MQTT_USERNAME, MQTT_PASSWORD, topicSysOnline.c_str(), 1, true, lwt.c_str());
-  if (connected) {
+  if (mqttClient.connect(DEVICE_ID, MQTT_USERNAME, MQTT_PASSWORD, topicSysOnline.c_str(), 1, true, lwt.c_str())) {
     Serial.println("MQTT connected successfully!");
-    if (mqttClient.subscribe(topicDeviceCmd.c_str(), 1)) {
-      Serial.printf("Subscribed to: %s\n", topicDeviceCmd.c_str());
-    } else {
-      Serial.println("Failed to subscribe to command topic!");
-    }
+    mqttClient.subscribe(topicDeviceCmd.c_str(), 1);
+    
+    mqttClient.subscribe(topicScheduleSet.c_str(), 1);
+    Serial.printf("Subscribed to: %s and %s\n", topicDeviceCmd.c_str(), topicScheduleSet.c_str());
+    
     publishOnlineStatus(true);
     publishDeviceState();
     deviceOnline = true;
@@ -327,16 +315,59 @@ void connectMQTT() {
     deviceOnline = false;
   }
 }
-void onMqttMessage(char* topic, byte* payload, unsigned int length) {
-  String message = "";
-  for (int i = 0; i < length; i++) {
-    message += (char)payload[i];
-  }
-  Serial.printf("Received [%s]: %s\n", topic, message.c_str());
-  if (String(topic) == topicDeviceCmd) {
-    handleDeviceCommand(message);
-  }
+
+void handleDeviceCommand(String message) {
+    unsigned long currentTime = millis();
+    if (currentTime - lastCommandTime < COMMAND_DEBOUNCE_DELAY) {
+        Serial.println("Command ignored (debounce)");
+        return;
+    }
+    lastCommandTime = currentTime;
+
+    JsonDocument doc;
+    if (deserializeJson(doc, message) != DeserializationError::Ok) {
+        Serial.println("JSON parse error");
+        return;
+    }
+    
+    bool stateChanged = false;
+
+    if (doc.containsKey("light")) {
+        if (String(doc["light"]) == "toggle") {
+        lightState = !lightState;
+        digitalWrite(LIGHT_PIN, lightState);
+        Serial.printf("MANUAL: Light turned %s\n", lightState ? "ON" : "OFF");
+        stateChanged = true;
+        }
+    }
+    
+    if (doc.containsKey("fan")) {
+        if (String(doc["fan"]) == "toggle") {
+        if (autoModeEnabled) {
+            autoModeEnabled = false;
+            Serial.println("MANUAL: User control detected. Auto mode DISABLED.");
+        }
+        
+        fanState = !fanState;
+        controlMotor(fanState);
+        Serial.printf("MANUAL: Fan turned %s\n", fanState ? "ON" : "OFF");
+        stateChanged = true;
+        }
+    }
+    
+    if (doc.containsKey("auto_mode")) {
+        if (String(doc["auto_mode"]) == "toggle") {
+            autoModeEnabled = !autoModeEnabled;
+            Serial.printf("SYSTEM: Automation mode is now %s\n", autoModeEnabled ? "ENABLED" : "DISABLED");
+            publishDeviceState();
+        }
+    }
+    
+    if (stateChanged) {
+        publishDeviceState();
+    }
 }
+
 void publishSensorData() {
   if (!mqttClient.connected()) return;
   float humidity = dht.readHumidity();
@@ -345,20 +376,19 @@ void publishSensorData() {
     Serial.println("Failed to read from DHT sensor!");
     return;
   }
-  int lightLevel = 100 + random(-50, 200);
+  
+  checkAutomation(temperature);
+
   JsonDocument doc;
   doc["ts"] = time(nullptr);
   doc["temp_c"] = round(temperature * 10) / 10.0;
   doc["hum_pct"] = round(humidity * 10) / 10.0;
-  doc["lux"] = lightLevel;
+  
   String payload;
   serializeJson(doc, payload);
-  if (mqttClient.publish(topicSensorState.c_str(), payload.c_str(), false)) {
-    Serial.printf("Sensor data published: %s\n", payload.c_str());
-  } else {
-    Serial.println("Failed to publish sensor data!");
-  }
+  mqttClient.publish(topicSensorState.c_str(), payload.c_str(), false);
 }
+
 void publishDeviceState() {
   if (!mqttClient.connected()) return;
   JsonDocument doc;
@@ -367,12 +397,56 @@ void publishDeviceState() {
   doc["fan"] = fanState ? "on" : "off";
   doc["rssi"] = WiFi.RSSI();
   doc["fw"] = FIRMWARE_VERSION;
+  doc["auto_mode"] = autoModeEnabled;
+  
   String payload;
   serializeJson(doc, payload);
-  if (mqttClient.publish(topicDeviceState.c_str(), payload.c_str(), true)) {
-    Serial.printf("Device state published: %s\n", payload.c_str());
-  } else {
-    Serial.println("Failed to publish device state!");
+  mqttClient.publish(topicDeviceState.c_str(), payload.c_str(), true);
+}
+
+void initGPIO() {
+  pinMode(LIGHT_PIN, OUTPUT);
+  pinMode(STATUS_LED_PIN, OUTPUT);
+  pinMode(MOTOR_IN1_PIN, OUTPUT);
+  pinMode(MOTOR_IN2_PIN, OUTPUT);
+  digitalWrite(LIGHT_PIN, LOW);
+  digitalWrite(STATUS_LED_PIN, LOW);
+  digitalWrite(MOTOR_IN1_PIN, LOW);
+  digitalWrite(MOTOR_IN2_PIN, LOW);
+}
+
+void initTopics() {
+  topicSensorState = String(TOPIC_NS) + "/sensor/state";
+  topicDeviceState = String(TOPIC_NS) + "/device/state";
+  topicDeviceCmd = String(TOPIC_NS) + "/device/cmd";
+  topicSysOnline = String(TOPIC_NS) + "/sys/online";
+  topicScheduleSet = String(TOPIC_NS) + "/schedule/set";
+}
+
+void initWiFi() {
+  Serial.printf("Connecting to WiFi: %s\n", WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+}
+void initNTP() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
+}
+void initMQTT() {
+  mqttClient.setServer(MQTT_HOST, MQTT_PORT);
+  mqttClient.setCallback(onMqttMessage);
+  connectMQTT();
+}
+void checkWiFi(unsigned long currentTime) {
+  if (WiFi.status() != WL_CONNECTED && currentTime - lastWifiCheck > WIFI_RECONNECT_INTERVAL) {
+    WiFi.reconnect();
+    lastWifiCheck = currentTime;
+  }
+}
+void checkMQTT(unsigned long currentTime) {
+  if (WiFi.status() == WL_CONNECTED && !mqttClient.connected() && currentTime - lastMqttCheck > MQTT_RECONNECT_INTERVAL) {
+    connectMQTT();
+    lastMqttCheck = currentTime;
   }
 }
 void publishOnlineStatus(bool online) {
@@ -381,29 +455,15 @@ void publishOnlineStatus(bool online) {
   doc["online"] = online;
   String payload;
   serializeJson(doc, payload);
-  if (mqttClient.publish(topicSysOnline.c_str(), payload.c_str(), true)) {
-    Serial.printf("Online status published: %s\n", payload.c_str());
-  } else {
-    Serial.println("Failed to publish online status!");
-  }
+  mqttClient.publish(topicSysOnline.c_str(), payload.c_str(), true);
 }
 void updateStatusLED() {
-  static unsigned long lastBlink = 0;
-  static bool ledState = false;
-  unsigned long currentTime = millis();
-  if (WiFi.status() == WL_CONNECTED && mqttClient.connected()) {
+  if (mqttClient.connected()) {
     digitalWrite(STATUS_LED_PIN, HIGH);
   } else if (WiFi.status() == WL_CONNECTED) {
-    if (currentTime - lastBlink >= 250) {
-      ledState = !ledState;
-      digitalWrite(STATUS_LED_PIN, ledState ? HIGH : LOW);
-      lastBlink = currentTime;
-    }
+    digitalWrite(STATUS_LED_PIN, millis() % 500 < 250);
   } else {
-    if (currentTime - lastBlink >= 1000) {
-      ledState = !ledState;
-      digitalWrite(STATUS_LED_PIN, ledState ? HIGH : LOW);
-      lastBlink = currentTime;
-    }
+    digitalWrite(STATUS_LED_PIN, millis() % 2000 < 1000);
   }
 }
+
